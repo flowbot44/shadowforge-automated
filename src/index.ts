@@ -11,11 +11,13 @@ const forgeContract = new ethers.Contract("0x94f84d94A1b8Ce60C5F99eAF89b4679bf9B
 const shadowcornItemsAbi = JSON.parse(fs.readFileSync('abis/shadowcornItems.abi.json', 'utf8'))
 const itemsContract = new ethers.Contract("0xb27bbc8f0092284a880d1616f184d86c1a640fae", shadowcornItemsAbi, provider);
 
+//hourly on the 4th minute
 cron.schedule('4 * * * *', () => {
     console.log("Entering The Dark Forest")
     enterTheDarKForest();
 });
 
+//daily at 00:44 UTC
 cron.schedule('44 0 * * *', () => {
     console.log("Trying to Claim Daily Rewards")
     claimDailyRewards();
@@ -46,16 +48,23 @@ async function enterTheDarKForest() {
             }
         }
         if(gasInGwei && gasInGwei < 50){
-        
-            const nebulaHusks = await itemsContract.balanceOf(signer.address,6)
-            const soulHusks = await itemsContract.balanceOf(signer.address,5)
-            const fireHusks = await itemsContract.balanceOf(signer.address,2)
-            const nebulaRituals = Math.floor(Number(nebulaHusks)/50)
-            const soulRituals = Math.floor(Number(soulHusks)/50)
-            const fireRituals = Math.floor(Number(fireHusks)/50)
-            const totalRituals = nebulaRituals + soulRituals + fireRituals
+            const tokenArray = [2,3,4,5,6]
+            const addressArray: string[] = []
+            tokenArray.forEach(element => {
+                addressArray.push(signer.address)
+            });
+            const balanceResults = await itemsContract.balanceOfBatch(addressArray,tokenArray)
+            if(!balanceResults)
+                return 
+
+            const fireRituals = Math.floor(Number(balanceResults[0])/50)
+            const slimeRituals = Math.floor(Number(balanceResults[1])/50)
+            const voltRituals = Math.floor(Number(balanceResults[2])/50)
+            const soulRituals = Math.floor(Number(balanceResults[3])/50)
+            const nebulaRituals = Math.floor(Number(balanceResults[4])/50)
+            let totalRituals = nebulaRituals + soulRituals + fireRituals + slimeRituals+ voltRituals
             //console.log(`husks soul: ${nebulaRituals}, nebula: ${soulRituals}, fire: ${fireRituals}, total of ${totalRituals} `)
-            if(totalRituals >= 50){ 
+            while(totalRituals >= 50){ 
                 let batchedJob: number[] = []
                 for (let index = 0;index < soulRituals && batchedJob.length < 50; index++){       
                     batchedJob.push(4); //soul
@@ -66,12 +75,19 @@ async function enterTheDarKForest() {
                 for (let index = 0;index < fireRituals && batchedJob.length < 50; index++){       
                     batchedJob.push(1); //fire
                 }
+                for (let index = 0;index < voltRituals && batchedJob.length < 50; index++){       
+                    batchedJob.push(3); //volt
+                }
+                for (let index = 0;index < slimeRituals && batchedJob.length < 50; index++){       
+                    batchedJob.push(2); //slime
+                }
             
                 const ritualResult = await connectedContract.batchConsumeRitualCharges(batchedJob)
                 if(ritualResult){
                     console.log(`Successful ritual ${ritualResult.hash}`)
                     await new Promise(resolve => setTimeout(resolve, 10000)) 
                 }
+                totalRituals = totalRituals - batchedJob.length
             }
         }
 
@@ -119,7 +135,8 @@ async function getGasInGwei() {
     
 } 
 async function start(){
-    enterTheDarKForest();
+    await claimDailyRewards()
+    await enterTheDarKForest()
 }
 
 start()
