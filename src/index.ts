@@ -11,6 +11,10 @@ const forgeContract = new ethers.Contract("0x94f84d94A1b8Ce60C5F99eAF89b4679bf9B
 const shadowcornItemsAbi = JSON.parse(fs.readFileSync('abis/shadowcornItems.abi.json', 'utf8'))
 const itemsContract = new ethers.Contract("0xb27bbc8f0092284a880d1616f184d86c1a640fae", shadowcornItemsAbi, provider);
 
+const MAX_RITUAL_MINT = 50
+const HUSKS_PER_RITUAL = 50
+
+
 //hourly on the 4th minute
 cron.schedule('4 * * * *', () => {
     console.log("Entering The Dark Forest")
@@ -24,6 +28,8 @@ cron.schedule('44 0 * * *', () => {
 }, {
     timezone: "UTC"
   });
+
+
 
 async function enterTheDarKForest() {
     try{
@@ -40,9 +46,9 @@ async function enterTheDarKForest() {
             for(const tokenId of result.stakedShadowcorns){
                 const stakingDetails = await forgeContract.getStakingDetails(tokenId)
                 if(stakingDetails.timeToReachCap === 0n){
-                    console.log(`ready to harvest ${tokenId}`)
+                    //console.log(`ready to harvest ${tokenId}`)
                     const tx = await connectedContract.harvestAndRestake(tokenId)
-                    console.log(`harvest and restaked ${tx.hash}`)
+                    console.log(`Shadowcorn ${tokenId} harvested and restaked ${tx.hash}`)
                     await new Promise(resolve => setTimeout(resolve, 10000)) 
                 }
             }
@@ -53,33 +59,33 @@ async function enterTheDarKForest() {
             tokenArray.forEach(element => {
                 addressArray.push(signer.address)
             });
-            const balanceResults = await itemsContract.balanceOfBatch(addressArray,tokenArray)
-            if(!balanceResults)
+            const huskBalanceResults = await itemsContract.balanceOfBatch(addressArray,tokenArray)
+            if(!huskBalanceResults)
                 return 
 
-            const fireRituals = Math.floor(Number(balanceResults[0])/50)
-            const slimeRituals = Math.floor(Number(balanceResults[1])/50)
-            const voltRituals = Math.floor(Number(balanceResults[2])/50)
-            const soulRituals = Math.floor(Number(balanceResults[3])/50)
-            const nebulaRituals = Math.floor(Number(balanceResults[4])/50)
-            let totalRituals = nebulaRituals + soulRituals + fireRituals + slimeRituals+ voltRituals
-            //console.log(`husks soul: ${nebulaRituals}, nebula: ${soulRituals}, fire: ${fireRituals}, total of ${totalRituals} `)
-            while(totalRituals >= 50){ 
+            const fireRituals = Math.floor(Number(huskBalanceResults[0])/HUSKS_PER_RITUAL)
+            const slimeRituals = Math.floor(Number(huskBalanceResults[1])/HUSKS_PER_RITUAL)
+            const voltRituals = Math.floor(Number(huskBalanceResults[2])/HUSKS_PER_RITUAL)
+            const soulRituals = Math.floor(Number(huskBalanceResults[3])/HUSKS_PER_RITUAL)
+            const nebulaRituals = Math.floor(Number(huskBalanceResults[4])/HUSKS_PER_RITUAL)
+            let totalRituals = nebulaRituals + soulRituals + fireRituals + slimeRituals + voltRituals
+            
+            while(totalRituals >= MAX_RITUAL_MINT){ 
                 let batchedJob: number[] = []
-                for (let index = 0;index < soulRituals && batchedJob.length < 50; index++){       
-                    batchedJob.push(4); //soul
+                for (let index = 0;index < soulRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
+                    batchedJob.push(4); //soul ritual
                 }
-                for (let index = 0;index < nebulaRituals && batchedJob.length < 50; index++){       
-                    batchedJob.push(5); //nebula
+                for (let index = 0;index < nebulaRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
+                    batchedJob.push(5); //nebula ritual
                 }
-                for (let index = 0;index < fireRituals && batchedJob.length < 50; index++){       
-                    batchedJob.push(1); //fire
+                for (let index = 0;index < fireRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
+                    batchedJob.push(1); //fire ritual
                 }
-                for (let index = 0;index < voltRituals && batchedJob.length < 50; index++){       
-                    batchedJob.push(3); //volt
+                for (let index = 0;index < voltRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
+                    batchedJob.push(3); //volt ritual
                 }
-                for (let index = 0;index < slimeRituals && batchedJob.length < 50; index++){       
-                    batchedJob.push(2); //slime
+                for (let index = 0;index < slimeRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
+                    batchedJob.push(2); //slime ritual
                 }
             
                 const ritualResult = await connectedContract.batchConsumeRitualCharges(batchedJob)
