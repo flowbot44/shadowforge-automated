@@ -14,6 +14,17 @@ const itemsContract = new ethers.Contract("0xb27bbc8f0092284a880d1616f184d86c1a6
 const MAX_RITUAL_MINT = 50
 const HUSKS_PER_RITUAL = 50
 
+const FIRE_TOKEN = 2
+const SLIME_TOKEN = 3
+const VOLT_TOKEN = 4
+const SOUL_TOKEN = 5
+const NEBULA_TOKEN = 6
+
+const FIRE_RITUAL = 1
+const SLIME_RITUAL = 2
+const VOLT_RITUAL = 3
+const SOUL_RITUAL = 4
+const NEBULA_RITUAL = 5
 
 //hourly on the 4th minute
 cron.schedule('4 * * * *', () => {
@@ -28,7 +39,6 @@ cron.schedule('44 0 * * *', () => {
 }, {
     timezone: "UTC"
   });
-
 
 
 async function enterTheDarKForest() {
@@ -54,49 +64,46 @@ async function enterTheDarKForest() {
             }
         }
         if(gasInGwei && gasInGwei < 50){
-            const tokenArray = [2,3,4,5,6]
+            const tokenArray = [FIRE_TOKEN,SLIME_TOKEN,VOLT_TOKEN,SOUL_TOKEN,NEBULA_TOKEN]
             const addressArray: string[] = []
             tokenArray.forEach(element => {
                 addressArray.push(signer.address)
             });
-            const huskBalanceResults = await itemsContract.balanceOfBatch(addressArray,tokenArray)
-            if(!huskBalanceResults)
-                return 
+            const huskBalanceResults = await itemsContract.balanceOfBatch(addressArray, tokenArray);
+            if (!huskBalanceResults) return;
 
-            const fireRituals = Math.floor(Number(huskBalanceResults[0])/HUSKS_PER_RITUAL)
-            const slimeRituals = Math.floor(Number(huskBalanceResults[1])/HUSKS_PER_RITUAL)
-            const voltRituals = Math.floor(Number(huskBalanceResults[2])/HUSKS_PER_RITUAL)
-            const soulRituals = Math.floor(Number(huskBalanceResults[3])/HUSKS_PER_RITUAL)
-            const nebulaRituals = Math.floor(Number(huskBalanceResults[4])/HUSKS_PER_RITUAL)
-            let totalRituals = nebulaRituals + soulRituals + fireRituals + slimeRituals + voltRituals
-            
-            while(totalRituals >= MAX_RITUAL_MINT){ 
-                let batchedJob: number[] = []
-                for (let index = 0;index < soulRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
-                    batchedJob.push(4); //soul ritual
+            const rituals = new Map<number, number>();
+            rituals.set(FIRE_RITUAL, Math.floor(Number(huskBalanceResults[0]) / HUSKS_PER_RITUAL));
+            rituals.set(SLIME_RITUAL, Math.floor(Number(huskBalanceResults[1]) / HUSKS_PER_RITUAL));
+            rituals.set(VOLT_RITUAL, Math.floor(Number(huskBalanceResults[2]) / HUSKS_PER_RITUAL));
+            rituals.set(SOUL_RITUAL, Math.floor(Number(huskBalanceResults[3]) / HUSKS_PER_RITUAL));
+            rituals.set(NEBULA_RITUAL, Math.floor(Number(huskBalanceResults[4]) / HUSKS_PER_RITUAL));
+
+            let totalRituals = Array.from(rituals.values()).reduce((acc, count) => acc + count, 0);
+
+            while (totalRituals >= MAX_RITUAL_MINT) {
+                let batchedJob:number[] = [];
+
+                rituals.forEach((count, ritual) => {
+                    for (let index = 0; index < count && batchedJob.length < MAX_RITUAL_MINT; index++) {
+                        batchedJob.push(ritual);
+                    }
+                });
+
+                const ritualResult = await connectedContract.batchConsumeRitualCharges(batchedJob);
+                if (ritualResult) {
+                    console.log(`Successful ritual ${ritualResult.hash}`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
                 }
-                for (let index = 0;index < nebulaRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
-                    batchedJob.push(5); //nebula ritual
-                }
-                for (let index = 0;index < fireRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
-                    batchedJob.push(1); //fire ritual
-                }
-                for (let index = 0;index < voltRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
-                    batchedJob.push(3); //volt ritual
-                }
-                for (let index = 0;index < slimeRituals && batchedJob.length < MAX_RITUAL_MINT; index++){       
-                    batchedJob.push(2); //slime ritual
-                }
-            
-                const ritualResult = await connectedContract.batchConsumeRitualCharges(batchedJob)
-                if(ritualResult){
-                    console.log(`Successful ritual ${ritualResult.hash}`)
-                    await new Promise(resolve => setTimeout(resolve, 10000)) 
-                }
-                totalRituals = totalRituals - batchedJob.length
+
+                // Update the counts in the map after the batch job
+                batchedJob.forEach(ritual => {
+                    rituals.set(ritual, rituals.get(ritual)! - batchedJob.filter(number => number === ritual).length);
+                });
+
+                totalRituals = Array.from(rituals.values()).reduce((acc, count) => acc + count, 0);
             }
         }
-
     } catch (e: Error | any) {
         console.log(e)
         e.code && e.info && console.error(`⚠️ ${e.code} (${e.info.error.shortMessage})`)
